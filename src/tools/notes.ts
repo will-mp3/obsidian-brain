@@ -110,8 +110,9 @@ export async function updateNote(
         return "Error: section name required for replace-section mode";
       }
 
+      const escapedSection = section.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const sectionPattern = new RegExp(
-        `(## ${section.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s*\\n)([\\s\\S]*?)(?=\\n## |$)`
+        `(## ${escapedSection}\\s*\\n)([\\s\\S]*?)(?=\\n## |$)`
       );
 
       const match = existing.match(sectionPattern);
@@ -119,7 +120,11 @@ export async function updateNote(
         return `Error: Section "## ${section}" not found in ${notePath}`;
       }
 
-      existing = existing.replace(sectionPattern, `$1${content}\n`);
+      // Strip leading heading from content if it duplicates the section heading
+      const headingPattern = new RegExp(`^##\\s+${escapedSection}\\s*\\n`);
+      const cleanContent = content.replace(headingPattern, "");
+
+      existing = existing.replace(sectionPattern, `$1${cleanContent}\n`);
       break;
     }
   }
