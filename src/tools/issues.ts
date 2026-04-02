@@ -7,7 +7,7 @@ import {
   type IssueType,
   type Issue,
 } from "../db/issues.js";
-import { writeNote, updateNote } from "./notes.js";
+import { writeNote, updateNote, readNote } from "./notes.js";
 
 const STATUS_LABELS: Record<IssueStatus, string> = {
   backlog: "Backlog",
@@ -100,8 +100,10 @@ export async function updateIssueStatus(
   const updated = dbUpdateIssue(vaultPath, id, fields);
   if (!updated) return `Error: Failed to update issue #${id}`;
 
-  // Update the frontmatter in the note
-  const frontmatter = `---
+  // Rewrite the note with updated frontmatter and status line
+  const noteContent = await readNote(vaultPath, updated.note_path);
+  if (!noteContent.startsWith("Error:")) {
+    const newFrontmatter = `---
 id: ${updated.id}
 type: ${updated.type}
 status: ${updated.status}
@@ -111,8 +113,22 @@ created: ${updated.created_at}
 updated: ${updated.updated_at}
 ---`;
 
-  // Update the status line in the note body
-  const statusLine = `**Status:** ${STATUS_LABELS[updated.status as IssueStatus]} | **Priority:** P${updated.priority} (${PRIORITY_LABELS[updated.priority]}) | **Type:** ${updated.type}`;
+    const newStatusLine = `**Status:** ${STATUS_LABELS[updated.status as IssueStatus]} | **Priority:** P${updated.priority} (${PRIORITY_LABELS[updated.priority]}) | **Type:** ${updated.type}`;
+
+    // Replace frontmatter
+    let rewritten = noteContent.replace(
+      /^---[\s\S]*?---/,
+      newFrontmatter
+    );
+
+    // Replace status line
+    rewritten = rewritten.replace(
+      /\*\*Status:\*\*.*?\*\*Type:\*\*\s*\w+/,
+      newStatusLine
+    );
+
+    await writeNote(vaultPath, updated.note_path, rewritten);
+  }
 
   // If notes were provided, append them
   if (fields.notes) {

@@ -4,6 +4,14 @@ import { upsertFTS } from "../db/fts.js";
 import { upsertVector } from "../db/vectors.js";
 import { embed } from "../embeddings/ollama.js";
 
+function validatePath(vaultPath: string, notePath: string): string | null {
+  const resolved = path.resolve(vaultPath, notePath);
+  if (!resolved.startsWith(path.resolve(vaultPath) + path.sep) && resolved !== path.resolve(vaultPath)) {
+    return `Error: Path "${notePath}" escapes vault boundary`;
+  }
+  return null;
+}
+
 function stripFrontmatter(content: string): string {
   if (content.startsWith("---")) {
     const end = content.indexOf("---", 3);
@@ -39,6 +47,9 @@ export async function readNote(
   vaultPath: string,
   notePath: string
 ): Promise<string> {
+  const pathError = validatePath(vaultPath, notePath);
+  if (pathError) return pathError;
+
   const fullPath = path.join(vaultPath, notePath);
   if (!fs.existsSync(fullPath)) {
     return `Error: Note not found at ${notePath}`;
@@ -51,6 +62,9 @@ export async function writeNote(
   notePath: string,
   content: string
 ): Promise<string> {
+  const pathError = validatePath(vaultPath, notePath);
+  if (pathError) return pathError;
+
   const fullPath = path.join(vaultPath, notePath);
   const dir = path.dirname(fullPath);
 
@@ -71,6 +85,9 @@ export async function updateNote(
   mode: "append" | "prepend" | "replace-section",
   section?: string
 ): Promise<string> {
+  const pathError = validatePath(vaultPath, notePath);
+  if (pathError) return pathError;
+
   const fullPath = path.join(vaultPath, notePath);
 
   if (!fs.existsSync(fullPath)) {

@@ -65,17 +65,24 @@ export function queryFTS(
 ): Array<{ path: string; snippet: string }> {
   const db = getDb(vaultPath);
 
-  const rows = db
-    .prepare(
-      `SELECT path, snippet(notes_fts, 2, '<mark>', '</mark>', '...', 40) as snippet
-       FROM notes_fts
-       WHERE notes_fts MATCH ?
-       ORDER BY rank
-       LIMIT ?`
-    )
-    .all(term, limit) as Array<{ path: string; snippet: string }>;
+  // Wrap in double quotes to force literal matching and prevent FTS5 operator injection
+  const safeTerm = `"${term.replace(/"/g, '""')}"`;
 
-  return rows;
+  try {
+    const rows = db
+      .prepare(
+        `SELECT path, snippet(notes_fts, 2, '<mark>', '</mark>', '...', 40) as snippet
+         FROM notes_fts
+         WHERE notes_fts MATCH ?
+         ORDER BY rank
+         LIMIT ?`
+      )
+      .all(safeTerm, limit) as Array<{ path: string; snippet: string }>;
+
+    return rows;
+  } catch {
+    return [];
+  }
 }
 
 export function getMtime(

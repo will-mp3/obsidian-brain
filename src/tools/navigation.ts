@@ -1,8 +1,16 @@
 import fs from "fs";
 import path from "path";
-import { updatePath, deleteFTS, upsertFTS } from "../db/fts.js";
-import { deleteVector, upsertVector } from "../db/vectors.js";
+import { updatePath } from "../db/fts.js";
+import { updateVectorPath } from "../db/vectors.js";
 import { embed } from "../embeddings/ollama.js";
+
+function validatePath(vaultPath: string, notePath: string): string | null {
+  const resolved = path.resolve(vaultPath, notePath);
+  if (!resolved.startsWith(path.resolve(vaultPath) + path.sep) && resolved !== path.resolve(vaultPath)) {
+    return `Error: Path "${notePath}" escapes vault boundary`;
+  }
+  return null;
+}
 
 function walkDir(
   dir: string,
@@ -33,6 +41,11 @@ export async function listNotes(
   folder: string = "",
   recursive: boolean = false
 ): Promise<string[]> {
+  if (folder) {
+    const pathError = validatePath(vaultPath, folder);
+    if (pathError) return [];
+  }
+
   const targetDir = path.join(vaultPath, folder);
 
   if (!fs.existsSync(targetDir)) {
@@ -47,6 +60,11 @@ export async function moveNote(
   from: string,
   to: string
 ): Promise<string> {
+  const fromError = validatePath(vaultPath, from);
+  if (fromError) return fromError;
+  const toError = validatePath(vaultPath, to);
+  if (toError) return toError;
+
   const fromFull = path.join(vaultPath, from);
   const toFull = path.join(vaultPath, to);
 
@@ -67,11 +85,10 @@ export async function moveNote(
   // Update FTS index
   updatePath(vaultPath, from, to);
 
-  // Update vector index (need to re-embed since path changed)
+  // Update vector index
   const embedding = await embed(content);
   if (embedding) {
-    deleteVector(vaultPath, from);
-    upsertVector(vaultPath, to, embedding);
+    updateVectorPath(vaultPath, from, to, embedding);
   }
 
   return `Moved ${from} → ${to}`;

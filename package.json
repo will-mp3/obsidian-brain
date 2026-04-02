@@ -2,9 +2,11 @@
   "name": "obsidian-mcp-server",
   "version": "1.0.0",
   "description": "",
-  "main": "src/server.ts",
+  "main": "dist/server.js",
   "scripts": {
-    "start": "tsx src/server.ts"
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "dev": "tsx src/server.ts"
   },
   "keywords": [],
   "author": "",
@@ -15,7 +17,8 @@
     "better-sqlite3": "^12.8.0",
     "sqlite-vec": "^0.1.9",
     "tsx": "^4.21.0",
-    "typescript": "^6.0.2"
+    "typescript": "^6.0.2",
+    "zod": "^3.25.0"
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.13",

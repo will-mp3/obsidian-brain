@@ -2,21 +2,31 @@ import * as sqliteVec from "sqlite-vec";
 import { getDb } from "./fts.js";
 
 let vecInitialized = false;
+let vecAvailable = true;
 
-export function initVec(vaultPath: string): void {
-  if (vecInitialized) return;
+export function initVec(vaultPath: string): boolean {
+  if (vecInitialized) return vecAvailable;
 
-  const db = getDb(vaultPath);
-  sqliteVec.load(db);
+  try {
+    const db = getDb(vaultPath);
+    sqliteVec.load(db);
 
-  db.exec(`
-    CREATE VIRTUAL TABLE IF NOT EXISTS notes_vec USING vec0(
-      path TEXT PRIMARY KEY,
-      embedding FLOAT[768]
-    );
-  `);
+    db.exec(`
+      CREATE VIRTUAL TABLE IF NOT EXISTS notes_vec USING vec0(
+        path TEXT PRIMARY KEY,
+        embedding FLOAT[768]
+      );
+    `);
 
-  vecInitialized = true;
+    vecInitialized = true;
+    vecAvailable = true;
+  } catch (err) {
+    console.error("sqlite-vec unavailable, falling back to FTS-only mode:", err);
+    vecInitialized = true;
+    vecAvailable = false;
+  }
+
+  return vecAvailable;
 }
 
 export function upsertVector(
@@ -24,7 +34,7 @@ export function upsertVector(
   notePath: string,
   embedding: number[]
 ): void {
-  initVec(vaultPath);
+  if (!initVec(vaultPath)) return;
   const db = getDb(vaultPath);
 
   db.prepare("DELETE FROM notes_vec WHERE path = ?").run(notePath);
@@ -38,7 +48,7 @@ export function queryVector(
   embedding: number[],
   limit: number = 5
 ): Array<{ path: string; distance: number }> {
-  initVec(vaultPath);
+  if (!initVec(vaultPath)) return [];
   const db = getDb(vaultPath);
 
   const rows = db
@@ -58,7 +68,7 @@ export function queryVector(
 }
 
 export function deleteVector(vaultPath: string, notePath: string): void {
-  initVec(vaultPath);
+  if (!initVec(vaultPath)) return;
   const db = getDb(vaultPath);
   db.prepare("DELETE FROM notes_vec WHERE path = ?").run(notePath);
 }
