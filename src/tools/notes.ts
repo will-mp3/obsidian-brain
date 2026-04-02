@@ -111,17 +111,22 @@ export async function updateNote(
       }
 
       const escapedSection = section.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+      // Detect heading level (##, ###, etc.) from the actual note
+      const levelMatch = existing.match(new RegExp(`^(#{2,6})\\s+${escapedSection}\\s*$`, "m"));
+      if (!levelMatch) {
+        return `Error: Section "${section}" not found in ${notePath}`;
+      }
+      const hashes = levelMatch[1];
+      const level = hashes.length;
+
+      // Match this section up to the next heading of same or higher level, or EOF
       const sectionPattern = new RegExp(
-        `(## ${escapedSection}\\s*\\n)([\\s\\S]*?)(?=\\n## |$)`
+        `(${hashes} ${escapedSection}\\s*\\n)([\\s\\S]*?)(?=\\n#{2,${level}} |$)`
       );
 
-      const match = existing.match(sectionPattern);
-      if (!match) {
-        return `Error: Section "## ${section}" not found in ${notePath}`;
-      }
-
       // Strip leading heading from content if it duplicates the section heading
-      const headingPattern = new RegExp(`^##\\s+${escapedSection}\\s*\\n`);
+      const headingPattern = new RegExp(`^${hashes}\\s+${escapedSection}\\s*\\n`);
       const cleanContent = content.replace(headingPattern, "");
 
       existing = existing.replace(sectionPattern, `$1${cleanContent}\n`);
