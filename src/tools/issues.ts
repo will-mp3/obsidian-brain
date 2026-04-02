@@ -8,6 +8,7 @@ import {
   type Issue,
 } from "../db/issues.js";
 import { writeNote, updateNote, readNote } from "./notes.js";
+import { moveNote } from "./navigation.js";
 
 const STATUS_LABELS: Record<IssueStatus, string> = {
   backlog: "Backlog",
@@ -71,8 +72,8 @@ export async function createIssue(
 ): Promise<string> {
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
   const folder = project
-    ? `02-projects/${project}/issues`
-    : `meta/issues`;
+    ? `02-projects/${project}/issues/active`
+    : `meta/issues/active`;
   const notePath = `${folder}/${type}-${slug}.md`;
 
   const issue = insertIssue(vaultPath, title, type, priority, notePath, project);
@@ -130,12 +131,21 @@ updated: ${updated.updated_at}
     await writeNote(vaultPath, updated.note_path, rewritten);
   }
 
+  // Move note to done/ when status changes to done
+  let currentPath = updated.note_path;
+  if (fields.status === "done" && currentPath.includes("/issues/active/")) {
+    const newPath = currentPath.replace("/issues/active/", "/issues/done/");
+    await moveNote(vaultPath, currentPath, newPath);
+    dbUpdateIssue(vaultPath, id, { note_path: newPath });
+    currentPath = newPath;
+  }
+
   // If notes were provided, append them
   if (fields.notes) {
     const timestamp = new Date().toISOString().split("T")[0];
     await updateNote(
       vaultPath,
-      updated.note_path,
+      currentPath,
       `- ${timestamp}: ${fields.notes}`,
       "append"
     );
@@ -160,6 +170,10 @@ export async function listFilteredIssues(
     project?: string;
   } = {}
 ): Promise<string> {
-  const issues = dbListIssues(vaultPath, filters);
+  const effectiveFilters = { ...filters };
+  if (effectiveFilters.status === undefined) {
+    effectiveFilters.status = ["backlog", "not_started", "in_progress", "code_review", "blocked"];
+  }
+  const issues = dbListIssues(vaultPath, effectiveFilters);
   return formatIssueList(issues);
 }

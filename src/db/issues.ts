@@ -77,6 +77,7 @@ export function updateIssue(
     priority?: number;
     title?: string;
     project?: string;
+    note_path?: string;
   }
 ): Issue | null {
   initIssuesTable(vaultPath);
@@ -100,6 +101,10 @@ export function updateIssue(
   if (fields.project !== undefined) {
     sets.push("project = ?");
     values.push(fields.project);
+  }
+  if (fields.note_path !== undefined) {
+    sets.push("note_path = ?");
+    values.push(fields.note_path);
   }
 
   values.push(id);
