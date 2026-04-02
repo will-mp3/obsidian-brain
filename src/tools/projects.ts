@@ -19,8 +19,6 @@ export async function createProject(
 `;
 
   const notes = `# ${name} — Notes
-
-## Log
 `;
 
   await writeNote(vaultPath, `${projectPath}/README.md`, readme);
