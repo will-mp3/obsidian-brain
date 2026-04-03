@@ -119,7 +119,7 @@ server.tool(
 
 server.tool(
   "reindex_vault",
-  "Full vault crawl: rebuild FTS5 and vector index, skipping unchanged files",
+  "Full vault crawl: rebuild FTS5 and vector index, skipping unchanged files. Removes stale entries for deleted files",
   {},
   async () => {
     const result = await reindexVault(VAULT_PATH);
@@ -127,7 +127,7 @@ server.tool(
       content: [
         {
           type: "text",
-          text: `Reindex complete: ${result.indexed} indexed, ${result.skipped} skipped`,
+          text: `Reindex complete: ${result.indexed} indexed, ${result.skipped} skipped, ${result.removed} stale entries removed`,
         },
       ],
     };

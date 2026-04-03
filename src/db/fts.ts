@@ -102,6 +102,14 @@ export function deleteFTS(vaultPath: string, notePath: string): void {
   db.prepare("DELETE FROM notes_meta WHERE path = ?").run(notePath);
 }
 
+export function allIndexedPaths(vaultPath: string): string[] {
+  const db = getDb(vaultPath);
+  const rows = db
+    .prepare("SELECT path FROM notes_meta")
+    .all() as Array<{ path: string }>;
+  return rows.map((r) => r.path);
+}
+
 export function updatePath(
   vaultPath: string,
   oldPath: string,

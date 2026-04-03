@@ -73,6 +73,15 @@ export function deleteVector(vaultPath: string, notePath: string): void {
   db.prepare("DELETE FROM notes_vec WHERE path = ?").run(notePath);
 }
 
+export function allVectorPaths(vaultPath: string): string[] {
+  if (!initVec(vaultPath)) return [];
+  const db = getDb(vaultPath);
+  const rows = db
+    .prepare("SELECT path FROM notes_vec")
+    .all() as Array<{ path: string }>;
+  return rows.map((r) => r.path);
+}
+
 export function updateVectorPath(
   vaultPath: string,
   oldPath: string,

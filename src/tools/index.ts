@@ -1,7 +1,7 @@
 import fs from "fs";
 import path from "path";
-import { getMtime, upsertFTS } from "../db/fts.js";
-import { upsertVector } from "../db/vectors.js";
+import { getMtime, upsertFTS, deleteFTS, allIndexedPaths } from "../db/fts.js";
+import { upsertVector, deleteVector, allVectorPaths } from "../db/vectors.js";
 import { embed } from "../embeddings/ollama.js";
 
 function stripFrontmatter(content: string): string {
@@ -39,12 +39,33 @@ function walkAllMd(dir: string, base: string): string[] {
 
 export async function reindexVault(
   vaultPath: string
-): Promise<{ indexed: number; skipped: number }> {
+): Promise<{ indexed: number; skipped: number; removed: number }> {
   const allFiles = walkAllMd(vaultPath, vaultPath);
+  const fileSet = new Set(allFiles);
 
   let indexed = 0;
   let skipped = 0;
+  let removed = 0;
 
+  // Remove stale entries for files that no longer exist on disk
+  const indexedPaths = allIndexedPaths(vaultPath);
+  for (const p of indexedPaths) {
+    if (!fileSet.has(p)) {
+      deleteFTS(vaultPath, p);
+      deleteVector(vaultPath, p);
+      removed++;
+    }
+  }
+
+  // Also clean up any vector-only orphans
+  const vectorPaths = allVectorPaths(vaultPath);
+  for (const p of vectorPaths) {
+    if (!fileSet.has(p)) {
+      deleteVector(vaultPath, p);
+    }
+  }
+
+  // Index new and changed files
   for (const relPath of allFiles) {
     const fullPath = path.join(vaultPath, relPath);
     const stat = fs.statSync(fullPath);
@@ -71,5 +92,5 @@ export async function reindexVault(
     indexed++;
   }
 
-  return { indexed, skipped };
+  return { indexed, skipped, removed };
 }
