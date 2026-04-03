@@ -10,12 +10,7 @@ export async function createProject(
 
 ## Overview
 
-## Goals
-
-## Status
-- [ ] In progress
-
-## Notes
+## Architecture
 `;
 
   await writeNote(vaultPath, `${projectPath}/README.md`, readme);
