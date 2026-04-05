@@ -65,8 +65,14 @@ export function queryFTS(
 ): Array<{ path: string; snippet: string }> {
   const db = getDb(vaultPath);
 
-  // Wrap in double quotes to force literal matching and prevent FTS5 operator injection
-  const safeTerm = `"${term.replace(/"/g, '""')}"`;
+  // Quote each word individually to prevent FTS5 operator injection
+  // while preserving implicit AND semantics and porter stemming
+  const safeTerm = term
+    .replace(/"/g, "")
+    .split(/\s+/)
+    .filter((w) => w.length > 0)
+    .map((w) => `"${w}"`)
+    .join(" ");
 
   try {
     const rows = db

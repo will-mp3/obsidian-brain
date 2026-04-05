@@ -21,7 +21,12 @@ export function initVec(vaultPath: string): boolean {
     vecInitialized = true;
     vecAvailable = true;
   } catch (err) {
-    console.error("sqlite-vec unavailable, falling back to FTS-only mode:", err);
+    console.warn(
+      "[WARN] sqlite-vec failed to load — vector search disabled, FTS-only mode active.\n" +
+        "  Try: npm rebuild sqlite-vec\n" +
+        "  Error:",
+      err
+    );
     vecInitialized = true;
     vecAvailable = false;
   }
