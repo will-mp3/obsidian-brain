@@ -127,7 +127,7 @@ server.tool(
       content: [
         {
           type: "text",
-          text: `Reindex complete: ${result.indexed} indexed, ${result.skipped} skipped, ${result.removed} stale entries removed`,
+          text: `Reindex complete: ${result.indexed} indexed, ${result.skipped} skipped, ${result.removed} stale entries removed, ${result.issuesRebuilt} issues rebuilt`,
         },
       ],
     };
@@ -144,7 +144,7 @@ server.tool(
     type: z.enum(["bug", "feature", "task"]).describe("Issue type"),
     priority: z.number().min(1).max(5).describe("Priority: 1 (critical) to 5 (trivial)"),
     description: z.string().optional().default("").describe("Issue description"),
-    project: z.string().optional().describe("Project name (folder under 02-projects/). Omit for global issues."),
+    project: z.string().describe("Project name (folder under 02-projects/)"),
   },
   async ({ title, type, priority, description, project }) => ({
     content: [{ type: "text", text: await createIssue(VAULT_PATH, title, type, priority, description, project) }],
@@ -155,15 +155,15 @@ server.tool(
   "update_issue",
   "Update an issue's status, priority, or add notes",
   {
-    id: z.number().describe("Issue ID"),
+    project: z.string().describe("Project the issue belongs to"),
+    id: z.number().describe("Issue ID (scoped to project)"),
     status: z.enum(["backlog", "not_started", "in_progress", "code_review", "done", "blocked"]).optional().describe("New status"),
     priority: z.number().min(1).max(5).optional().describe("New priority"),
     title: z.string().optional().describe("New title"),
-    project: z.string().optional().describe("Move to a different project"),
     notes: z.string().optional().describe("Progress note to append"),
   },
-  async ({ id, status, priority, title, project, notes }) => ({
-    content: [{ type: "text", text: await updateIssueStatus(VAULT_PATH, id, { status, priority, title, project, notes }) }],
+  async ({ project, id, status, priority, title, notes }) => ({
+    content: [{ type: "text", text: await updateIssueStatus(VAULT_PATH, project, id, { status, priority, title, notes }) }],
   })
 );
 

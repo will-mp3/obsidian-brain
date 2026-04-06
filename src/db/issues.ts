@@ -16,7 +16,7 @@ export interface Issue {
   type: IssueType;
   status: IssueStatus;
   priority: number;
-  project: string | null;
+  project: string;
   note_path: string;
   created_at: string;
   updated_at: string;
@@ -27,16 +27,17 @@ export function initIssuesTable(vaultPath: string): void {
 
   db.exec(`
     CREATE TABLE IF NOT EXISTS issues (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      project TEXT NOT NULL,
+      id INTEGER NOT NULL,
       title TEXT NOT NULL,
       type TEXT NOT NULL CHECK(type IN ('bug', 'feature', 'task')),
       status TEXT NOT NULL DEFAULT 'not_started'
         CHECK(status IN ('backlog', 'not_started', 'in_progress', 'code_review', 'done', 'blocked')),
       priority INTEGER NOT NULL CHECK(priority BETWEEN 1 AND 5),
-      project TEXT,
       note_path TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (project, id)
     );
 
     CREATE INDEX IF NOT EXISTS idx_issues_status ON issues(status);
@@ -52,31 +53,41 @@ export function insertIssue(
   type: IssueType,
   priority: number,
   notePath: string,
-  project?: string
+  project: string
 ): Issue {
   initIssuesTable(vaultPath);
   const db = getDb(vaultPath);
 
-  const result = db
-    .prepare(
-      `INSERT INTO issues (title, type, priority, note_path, project)
-       VALUES (?, ?, ?, ?, ?)`
-    )
-    .run(title, type, priority, notePath, project ?? null);
+  const row = db
+    .prepare("SELECT COALESCE(MAX(id), 0) + 1 AS next_id FROM issues WHERE project = ?")
+    .get(project) as { next_id: number };
+
+  db.prepare(
+    `INSERT INTO issues (project, id, title, type, priority, note_path)
+     VALUES (?, ?, ?, ?, ?, ?)`
+  ).run(project, row.next_id, title, type, priority, notePath);
 
   return db
-    .prepare("SELECT * FROM issues WHERE id = ?")
-    .get(result.lastInsertRowid) as Issue;
+    .prepare("SELECT * FROM issues WHERE project = ? AND id = ?")
+    .get(project, row.next_id) as Issue;
+}
+
+export function getIssue(vaultPath: string, project: string, id: number): Issue | null {
+  initIssuesTable(vaultPath);
+  const db = getDb(vaultPath);
+  return db.prepare("SELECT * FROM issues WHERE project = ? AND id = ?").get(project, id) as
+    | Issue
+    | null;
 }
 
 export function updateIssue(
   vaultPath: string,
+  project: string,
   id: number,
   fields: {
     status?: IssueStatus;
     priority?: number;
     title?: string;
-    project?: string;
     note_path?: string;
   }
 ): Issue | null {
@@ -98,22 +109,18 @@ export function updateIssue(
     sets.push("title = ?");
     values.push(fields.title);
   }
-  if (fields.project !== undefined) {
-    sets.push("project = ?");
-    values.push(fields.project);
-  }
   if (fields.note_path !== undefined) {
     sets.push("note_path = ?");
     values.push(fields.note_path);
   }
 
-  values.push(id);
+  values.push(project, id);
 
-  db.prepare(`UPDATE issues SET ${sets.join(", ")} WHERE id = ?`).run(
+  db.prepare(`UPDATE issues SET ${sets.join(", ")} WHERE project = ? AND id = ?`).run(
     ...values
   );
 
-  return db.prepare("SELECT * FROM issues WHERE id = ?").get(id) as
+  return db.prepare("SELECT * FROM issues WHERE project = ? AND id = ?").get(project, id) as
     | Issue
     | null;
 }
@@ -169,10 +176,23 @@ export function listIssues(
     .all(...values) as Issue[];
 }
 
-export function getIssue(vaultPath: string, id: number): Issue | null {
+export function rebuildIssues(vaultPath: string, issues: Issue[]): number {
   initIssuesTable(vaultPath);
   const db = getDb(vaultPath);
-  return db.prepare("SELECT * FROM issues WHERE id = ?").get(id) as
-    | Issue
-    | null;
+
+  db.prepare("DELETE FROM issues").run();
+
+  const insert = db.prepare(
+    `INSERT INTO issues (project, id, title, type, status, priority, note_path, created_at, updated_at)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+  );
+
+  const tx = db.transaction(() => {
+    for (const i of issues) {
+      insert.run(i.project, i.id, i.title, i.type, i.status, i.priority, i.note_path, i.created_at, i.updated_at);
+    }
+  });
+  tx();
+
+  return issues.length;
 }

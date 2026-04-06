@@ -33,7 +33,7 @@ id: ${issue.id}
 type: ${issue.type}
 status: ${issue.status}
 priority: ${issue.priority}
-project: ${issue.project ?? "none"}
+project: ${issue.project}
 created: ${issue.created_at}
 updated: ${issue.updated_at}
 ---
@@ -56,7 +56,7 @@ function formatIssueList(issues: Issue[]): string {
 
   const lines = issues.map(
     (i) =>
-      `#${i.id} [P${i.priority}] [${i.status}] (${i.type}) ${i.title}${i.project ? ` — ${i.project}` : ""}`
+      `${i.project}#${i.id} [P${i.priority}] [${i.status}] (${i.type}) ${i.title}`
   );
 
   return lines.join("\n");
@@ -68,12 +68,10 @@ export async function createIssue(
   type: IssueType,
   priority: number,
   description: string = "",
-  project?: string
+  project: string
 ): Promise<string> {
   const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "");
-  const folder = project
-    ? `02-projects/${project}/issues/active`
-    : `meta/issues/active`;
+  const folder = `02-projects/${project}/issues/active`;
   const notePath = `${folder}/${type}-${slug}.md`;
 
   const issue = insertIssue(vaultPath, title, type, priority, notePath, project);
@@ -81,25 +79,25 @@ export async function createIssue(
 
   await writeNote(vaultPath, notePath, markdown);
 
-  return `Created issue #${issue.id}: ${title} [P${priority}] [${type}]\nNote: ${notePath}`;
+  return `Created ${issue.project}#${issue.id}: ${title} [P${priority}] [${type}]\nNote: ${notePath}`;
 }
 
 export async function updateIssueStatus(
   vaultPath: string,
+  project: string,
   id: number,
   fields: {
     status?: IssueStatus;
     priority?: number;
     title?: string;
-    project?: string;
     notes?: string;
   }
 ): Promise<string> {
-  const issue = getIssue(vaultPath, id);
-  if (!issue) return `Error: Issue #${id} not found`;
+  const issue = getIssue(vaultPath, project, id);
+  if (!issue) return `Error: Issue ${project}#${id} not found`;
 
-  const updated = dbUpdateIssue(vaultPath, id, fields);
-  if (!updated) return `Error: Failed to update issue #${id}`;
+  const updated = dbUpdateIssue(vaultPath, project, id, fields);
+  if (!updated) return `Error: Failed to update issue ${project}#${id}`;
 
   // Rewrite the note with updated frontmatter and status line
   const noteContent = await readNote(vaultPath, updated.note_path);
@@ -109,20 +107,18 @@ id: ${updated.id}
 type: ${updated.type}
 status: ${updated.status}
 priority: ${updated.priority}
-project: ${updated.project ?? "none"}
+project: ${updated.project}
 created: ${updated.created_at}
 updated: ${updated.updated_at}
 ---`;
 
     const newStatusLine = `**Status:** ${STATUS_LABELS[updated.status as IssueStatus]} | **Priority:** P${updated.priority} (${PRIORITY_LABELS[updated.priority]}) | **Type:** ${updated.type}`;
 
-    // Replace frontmatter
     let rewritten = noteContent.replace(
       /^---[\s\S]*?---/,
       newFrontmatter
     );
 
-    // Replace status line
     rewritten = rewritten.replace(
       /\*\*Status:\*\*.*?\*\*Type:\*\*\s*\w+/,
       newStatusLine
@@ -136,7 +132,7 @@ updated: ${updated.updated_at}
   if (fields.status === "done" && currentPath.includes("/issues/active/")) {
     const newPath = currentPath.replace("/issues/active/", "/issues/done/");
     await moveNote(vaultPath, currentPath, newPath);
-    dbUpdateIssue(vaultPath, id, { note_path: newPath });
+    dbUpdateIssue(vaultPath, project, id, { note_path: newPath });
     currentPath = newPath;
   }
 
@@ -152,13 +148,12 @@ updated: ${updated.updated_at}
   }
 
   const changes: string[] = [];
-  if (fields.status) changes.push(`status → ${fields.status}`);
-  if (fields.priority) changes.push(`priority → P${fields.priority}`);
-  if (fields.title) changes.push(`title → ${fields.title}`);
-  if (fields.project) changes.push(`project → ${fields.project}`);
+  if (fields.status) changes.push(`status -> ${fields.status}`);
+  if (fields.priority) changes.push(`priority -> P${fields.priority}`);
+  if (fields.title) changes.push(`title -> ${fields.title}`);
   if (fields.notes) changes.push(`added note`);
 
-  return `Updated issue #${id}: ${changes.join(", ")}`;
+  return `Updated ${project}#${id}: ${changes.join(", ")}`;
 }
 
 export async function listFilteredIssues(
